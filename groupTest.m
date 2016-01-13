@@ -2,9 +2,8 @@
 close all; clear all;
 % load('Stefan_3_Frames.mat');
 load('Office1_QP22.mat');
-src = double(Ymtx_Cur);
-ref = double(Ymtx_Ref);
-inc = double(Ymtx_Inc); 
+src = double(Ymtx_Cur);ref = double(Ymtx_Ref);inc = double(Ymtx_Inc); 
+% src = double(Y_Cur);ref = double(Y_Ref);inc = double(Y_Inc);
 [height, width] = size(src);
 totPix = height*width;
 
@@ -24,7 +23,8 @@ para.verbose = 1; % show debug info
 
 % segmentation parameters, used only when maskMode==1
 segpara.Debugging_Enabled = 0;
-segpara.Conn_area = round(0.01*height*width); % now is the absolute pixel count
+% segpara.Conn_area = round(0.02*height*width); % now is the absolute pixel count
+segpara.Conn_area = round(0.01*height*width);
 segpara.QP = 22;
 segpara.Displacement = 5;
 segpara.channel = 1;

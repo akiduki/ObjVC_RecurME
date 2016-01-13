@@ -72,7 +72,7 @@ if Y_channel == 1,
             warning('CHECK WHETHER THE INPUTS ARE RECONSTRUCTED FRAME!');
             [~, boundingbox, Mask] = postprocessing(srcFrame, err, segPara);
             se = strel('disk', dilate_width);
-            for i=1:length(boundingbox);
+            for i=1:length(Mask);
                 objMask{i} = imdilate(Mask{i}, se);
             end
         else
@@ -149,7 +149,7 @@ if Y_channel == 1,
 %                             boundingboxQuad{ii}(3) = boundingboxQuad{ii}(3) + curr_boundingbox(3);
 %                         end
                         se = strel('disk', dilate_width);
-                        for ii=1:length(boundingboxQuad);
+                        for ii=1:length(MaskQuad);
                             MaskQuad{ii} = imdilate(MaskQuad{ii}, se);
                         end
                         

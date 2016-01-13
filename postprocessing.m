@@ -41,7 +41,7 @@ connectivity_neighbor_num = 4;
 fg_thrLo = 10;
 bb_marginLo = 5;
 if ~QuadTreeMode,
-    stripe_removal_threshold = 5; 	% Added on 2015/11/07 - Remove narrow stripe
+    stripe_removal_threshold = 8; 	% Added on 2015/11/07 - Remove narrow stripe
 else
     stripe_removal_threshold = 0;
 end
@@ -87,17 +87,18 @@ end
 
 % Image Connectivity Processing
 E4 = bwareaopen(E3, connectivity_area);
-E5 = bwlabel(E4,connectivity_neighbor_num);
 if IsDebugging
 	figure;imshow(E4,[]);title('Binary Error Image After Connectivity Filtering');
 	print(gcf,'-dpng','Binary_Sparse_Image_After_Connectivity_Filtering.png');	
 end
 
 % Remove the boundary strips
-E5(1:stripe_removal_threshold,:) = 0;
-E5(:,1:stripe_removal_threshold) = 0;
-E5(end-stripe_removal_threshold+1:end,:) = 0;
-E5(:,end-stripe_removal_threshold+1:end) = 0;
+E4(1:stripe_removal_threshold,:) = 0;
+E4(:,1:stripe_removal_threshold) = 0;
+E4(end-stripe_removal_threshold+1:end,:) = 0;
+E4(:,end-stripe_removal_threshold+1:end) = 0;
+
+E5 = bwlabel(E4,connectivity_neighbor_num);
 % E5 = imdilate(E5,strel('square',5));
 
 % Region Extraction and Bounding Box Generation
@@ -197,7 +198,7 @@ for i=1:length(bounding_box_info),
     Temp_Mask = zeros(Row, Col);
     Temp_Mask(bounding_box_info{i}(1):bounding_box_info{i}(1)+bounding_box_info{i}(3)-1,...
         bounding_box_info{i}(2):bounding_box_info{i}(2)+bounding_box_info{i}(4)-1) = 1;
-    if sum(Temp_Mask(:)==1) >= connectivity_area*0.5 && sum(Temp_Mask(:)==1) < 0.8*Row*Col,
+    if sum(Temp_Mask(:)==1) >= 1.5*connectivity_area && sum(Temp_Mask(:)==1) < 0.8*Row*Col,
         E7 = E6.* Temp_Mask;
         Y_SubFrame{objCnt} = Y_Frame(bounding_box_info{i}(1):bounding_box_info{i}(1)+bounding_box_info{i}(3)-1,...
         bounding_box_info{i}(2):bounding_box_info{i}(2)+bounding_box_info{i}(4)-1);
