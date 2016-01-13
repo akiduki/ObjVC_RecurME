@@ -86,7 +86,7 @@ errFrame = inc - predFrame;
 % Now, check qTreeCent, if qTreeCent is non-empty, define quad-tree split
 % mode, apply objMask in four quadrants and apply objMaskL2 within each
 % quadrant separately.
-tauL1 = cell(length(objMaskL1),1); tauL2 = tauL1;
+tauL1 = cell(objIdx,1); tauL2 = tauL1;
 for objIdx = 1:length(objMaskL1),
     qTree = qTreeCent{objIdx};
     objMaskL1sub = objMaskL1{objIdx};
@@ -95,11 +95,11 @@ for objIdx = 1:length(objMaskL1),
         % non split mode, directly apply objMask and objMaskL2
         recurPara.MElayer = 1;
         recurPara.objMask = objMaskL1sub;
-        [predFrameL1, ~, tauL1, ~, ~] = SolveL1MErecursive(inc, predFrame, para, segpara, recurPara);
+        [predFrameL1, errFrameL1, tauL1, ~, ~] = SolveL1MErecursive(inc, predFrame, para, segpara, recurPara);
         
         recurPara.MElayer = 2;
         recurPara.objMask = objMaskL2sub;
-        [predFrameL2, ~, tauL2, ~, ~] = SolveL1MErecursive(inc, predFrameL1, para, segpara, recurPara);
+        [predFrameL2, errFrameL2, tauL2, ~, ~] = SolveL1MErecursive(inc, predFrameL1, para, segpara, recurPara);
     else
         % split mode
         Xcentroid = qTree(1); Ycentroid = qTree(2);
@@ -117,43 +117,31 @@ for objIdx = 1:length(objMaskL1),
         curr_objMaskQuad{4}(Xcentroid+1:end,Ycentroid+1:end) = objMaskL1sub(Xcentroid+1:end,Ycentroid+1:end);
         
         % save tauL1 per quadrant as well
-        if objIdx==1,
-            predL1 = predFrame;
-        else
-            predL1 = predFrameL1;
-        end
-            
+        currL1 = cell(4,1);
+        predFrameL1 = predFrame;
+        errFrameL1 = zeros(height,width);
+        
         % Now apply each one successively
         recurPara.MElayer = 1;
         recurPara.objMask = curr_objMaskQuad;
-        [predFrameL1, ~, currL1, ~, ~] = SolveL1MErecursive(inc, predL1, para, segpara, recurPara);
-        tauL1{objIdx} = currL1;
+        [predFrameL1, errFrameL1, currL1, ~, ~] = SolveL1MErecursive(inc, predFrame, para, segpara, recurPara);
+        tauL1(objIdx) = currL1;
         
         % Once L1 is done, go for L2, and apply for each quadrant as well
         currL2 = cell(4,1);
-        if objIdx==1,
-            predL2 = predFrameL1;
-            predFrameL2 = predFrameL1;
-        else
-            predL2 = predFrameL2;
-            % inherits the Layer 1 result
-            predL2(logical(objMaskL1sub)) = predFrameL1(logical(objMaskL1sub));
-            predFrameL2 = predL2;
-        end
+        predFrameL2 = predFrameL1;
         
         for qIdx = 1:4,
             recurPara.MElayer = 2;
             if ~isempty(objMaskL2sub{qIdx}),
                 recurPara.objMask = objMaskL2sub{qIdx};
                 
-                [predFrameL2q, ~, currL2{qIdx}, ~, ~] = SolveL1MErecursive(inc, predL2, para, segpara, recurPara);
+                [predFrameL2q, errFrameL2q, currL2{qIdx}, ~, ~] = SolveL1MErecursive(inc, predFrameL1, para, segpara, recurPara);
                 predFrameL2(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx)) = predFrameL2q(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx));
             end
         end
-        tauL2{objIdx} = currL2;
-        
+        ta
+        errFrameL2 = inc - predFrameL2;
         
     end
 end
-errFrameL1 = inc - predFrameL1;
-errFrameL2 = inc - predFrameL2;
