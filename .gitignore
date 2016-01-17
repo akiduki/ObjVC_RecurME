@@ -21,6 +21,7 @@
 *.tar
 *.zip
 *.mat
+*.png
 
 # Logs and databases #
 ######################
