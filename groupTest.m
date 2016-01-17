@@ -1,7 +1,8 @@
 %% Testing recursiveME
 close all; clear all;
-% load('Stefan_3_Frames.mat');
+% load('./Data/Stefan_3_Frames.mat');
 load('./Data/Office1_QP22.mat');
+% load('./Data/City_QP22.mat'); Y_Cur = Record.Current_Frame_Y; Y_Ref = Record.Reference_Frame_Y; Y_Inc = Record.Incoming_Frame_Y;
 src = double(Ymtx_Cur);ref = double(Ymtx_Ref);inc = double(Ymtx_Inc); 
 % src = double(Y_Cur);ref = double(Y_Ref);inc = double(Y_Inc);
 [height, width] = size(src);
@@ -25,6 +26,7 @@ para.verbose = 1; % show debug info
 segpara.Debugging_Enabled = 0;
 % segpara.Conn_area = round(0.02*height*width); % now is the absolute pixel count
 segpara.Conn_area = round(0.01*height*width);
+segpara.ConfThrLo = 5;
 segpara.QP = 22;
 segpara.Displacement = 5;
 segpara.channel = 1;
@@ -94,12 +96,30 @@ for objIdx = 1:length(objMaskL1),
     if isempty(qTree),
         % non split mode, directly apply objMask and objMaskL2
         recurPara.MElayer = 1;
-        recurPara.objMask = objMaskL1sub;
-        [predFrameL1, ~, tauL1, ~, ~] = SolveL1MErecursive(inc, predFrame, para, segpara, recurPara);
+        recurPara.objMask = {objMaskL1sub};
+        if objIdx==1,
+            predL1 = predFrame;
+        else
+            predL1 = predFrameL1;
+        end
+        [predFrameL1, ~, tauL1, ~, ~] = SolveL1MErecursive(inc, predL1, para, segpara, recurPara);
         
-        recurPara.MElayer = 2;
-        recurPara.objMask = objMaskL2sub;
-        [predFrameL2, ~, tauL2, ~, ~] = SolveL1MErecursive(inc, predFrameL1, para, segpara, recurPara);
+        if ~isempty(objMaskL2sub),
+            if objIdx==1,
+                predL2 = predFrameL1;
+                predFrameL2 = predFrameL1;
+            else
+                predL2 = predFrameL2;
+                % inherits the Layer 1 result
+                predL2(logical(objMaskL1sub)) = predFrameL1(logical(objMaskL1sub));
+                predFrameL2 = predL2;
+            end
+            recurPara.MElayer = 2;
+            recurPara.objMask = objMaskL2sub;
+            [predFrameL2, ~, tauL2, ~, ~] = SolveL1MErecursive(inc, predL2, para, segpara, recurPara);
+        else
+            predFrameL2 = predFrameL1;
+        end
     else
         % split mode
         Xcentroid = qTree(1); Ycentroid = qTree(2);

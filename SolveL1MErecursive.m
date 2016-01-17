@@ -132,6 +132,7 @@ if Y_channel == 1,
 %                     srcFrameObjMask{4} = srcFrame(Xcentroid+1:end,Ycentroid+1:end);
                     % decompose the original mask as well
                     curr_objMaskQuad = cell(4,1);
+                    errMask = cell(4,1);
                     [curr_objMaskQuad{:}] = deal(zeros(imgSize(1),imgSize(2)));
                     curr_objMaskQuad{1}(1:Xcentroid,1:Ycentroid) = curr_objMask(1:Xcentroid,1:Ycentroid);
                     curr_objMaskQuad{2}(1:Xcentroid,Ycentroid+1:end) = curr_objMask(1:Xcentroid,Ycentroid+1:end);
@@ -168,17 +169,15 @@ if Y_channel == 1,
                     end
                     
                 else
+                    errMask = zeros(imgSize(1),imgSize(2));
                     % further layers shall do on masked err only
                     errMask = err.*curr_objMask;
                     srcFrameObjMask = srcFrame.*curr_objMask;
                     segPara.Conn_area = 500;
                     [~, boundingboxSub, MaskSub] = postprocessing(srcFrameObjMask, errMask, segPara);
-                    for i=1:length(boundingboxSub),
-                        boundingboxSub{i}(1) = boundingboxSub{i}(1) + curr_boundingbox(1);
-                        boundingboxSub{i}(3) = boundingboxSub{i}(3) + curr_boundingbox(3);
-                    end
+                    
                     se = strel('disk', dilate_width);
-                    for i=1:length(boundingboxSub);
+                    for i=1:length(MaskSub);
                         MaskSub{i} = imdilate(MaskSub{i}, se);
                     end
                     

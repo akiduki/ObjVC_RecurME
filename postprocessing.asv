@@ -47,7 +47,7 @@ connectivity_neighbor_num = 4;
 bb_marginLo = 5;
 if ~QuadTreeMode,
     stripe_removal_threshold = 8; 	% Remove narrow stripe
-%     stripe_removal_threshold = 3;
+    stripe_removal_threshold = 3;
 else
     stripe_removal_threshold = 0;
 end
@@ -100,8 +100,8 @@ end
 % Remove the boundary strips
 E4(1:stripe_removal_threshold,:) = 0;
 E4(:,1:stripe_removal_threshold) = 0;
-E4(end-stripe_removal_threshold+1:end,:) = 0;
-E4(:,end-stripe_removal_threshold+1:end) = 0;
+E5(end-stripe_removal_threshold+1:end,:) = 0;
+E5(:,end-stripe_removal_threshold+1:end) = 0;
 
 E5 = bwlabel(E4,connectivity_neighbor_num);
 
