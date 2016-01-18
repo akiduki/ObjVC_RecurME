@@ -90,6 +90,8 @@ end
 % image derivatives for the reference frame
 % refYx = imfilter( ref, (-fspecial('sobel')') / 8 );
 % refYy = imfilter( ref,  -fspecial('sobel')   / 8 );
+% using Gaussian filtered image instead
+% refSmooth = imfilter( ref, fspecial('gaussian', 7, 1),'symmetric' );
 [refYx, refYy] = imgradientxy( ref, 'CentralDifference');
 %refYy = refYy/norm(refYy);
 % xdata = [1 imgSize(2)];

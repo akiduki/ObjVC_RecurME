@@ -46,6 +46,7 @@ if isfield(segPara,'dilate_width'),
 else
     dilate_width = 2;
 end
+QuadTreeMode = segPara.QuadTreeMode; % QuadTreeMode enabling flag
 
 % Image size
 [height, width] = size(srcFrame);
@@ -66,7 +67,7 @@ if Y_channel == 1,
             % Define the transform origin
             imgSize = [height, width];
             
-            err = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize);
+            [err, transform] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode);
             % bounding box mode, needs derive bounding box from err
             warning('DERIVING BOUNDING BOX MODE ENABLED!');
             warning('CHECK WHETHER THE INPUTS ARE RECONSTRUCTED FRAME!');
@@ -116,7 +117,7 @@ if Y_channel == 1,
 %                 L1solverPara.objMask = ones(imgSize(1), imgSize(2));
 %                 [transform, err, pred, ~] = lern2frmtau(srcFrame, refFrame, L1solverPara);
                 [err, transform, inlier_objMask, quadtreeFlag] = ...
-                    computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize);
+                    computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode);
                 
                 % bounding box mode, needs derive bounding box from err
                 warning('DERIVING BOUNDING BOX MODE ENABLED!');
@@ -248,7 +249,7 @@ end
 end
 
 % Nested function for recursive ME
-function [err, transform, inlier_objMask, quadtreePart] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize)
+function [err, transform, inlier_objMask, quadtreePart] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode)
 % TO-DO: update inlier_objMask within the area object mask defined.
 originalObjMask = L1solverPara.objMask; % sub-frame object region
 obj_idx = find(originalObjMask(:)==1);
@@ -293,7 +294,7 @@ while ~IsConverged,
         % not converged
         inlier_objMask = zeros(imgSize(1),imgSize(2));
         inlier_objMask(inlier_obj_idx) = 1;
-        if (inlier_ratio-prev_inlier_ratio)*obj_pix_cnt <= 10,
+        if (inlier_ratio-prev_inlier_ratio)*obj_pix_cnt <= 10 && QuadTreeMode,
             % check whether there is a significant amount of pixel changes
             % if not, partition into quad-tree
             

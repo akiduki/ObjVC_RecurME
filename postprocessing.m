@@ -39,10 +39,16 @@ else
     fg_thrLo = 6;
 end
 
+if isfield(parameters,'ByPassAddMorpFilt'),
+    ByPassAddMorpFilt = parameters.ByPassAddMorpFilt;
+else
+    ByPassAddMorpFilt = 1;
+end
+
 % Input frame dimension
 [Row, Col] = size(Y_Frame);
 % Constants
-morphological_processing_window_size = 4;
+% morphological_processing_window_size = 0;
 connectivity_neighbor_num = 4;
 bb_marginLo = 5;
 if ~QuadTreeMode,
@@ -77,9 +83,7 @@ if IsDebugging
 end
 
 % Image Morphological Processing
-if morphological_processing_window_size	~= 0
-% 	se = strel('disk',morphological_processing_window_size);
-% 	se = strel('square',morphological_processing_window_size);
+if ~ByPassAddMorpFilt,
 	E3 = imdilate(Ethr,strel('square',3));
 	E3 = imerode(E3,strel('square',3));
 else
