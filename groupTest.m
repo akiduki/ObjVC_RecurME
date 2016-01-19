@@ -9,8 +9,6 @@ load('./Data/Office1_QP22.mat'); src = double(Ymtx_Cur);ref = double(Ymtx_Ref);i
 totPix = height*width;
 
 % L1-solver para
-para.tauModel = 'AFFINE';
-% para.tauModel = 'HOMOGRAPHY';
 para.tau0 = eye(3);
 para.numPts = 10;
 para.tolInner = 1e-4;
@@ -27,11 +25,12 @@ para.verbose = 1; % show debug info
 segpara.Debugging_Enabled = 0;
 % segpara.Conn_area = round(0.02*height*width); % now is the absolute pixel count
 segpara.Conn_area = round(0.01*height*width);
-segpara.ConfThrLo = 5;
+segpara.ConfThrLo = 5; % 5 for other sequences, 8 for city
 segpara.QP = 22;
 segpara.Displacement = 5;
 segpara.channel = 1;
 segpara.ByPassFilling = 1;
+segpara.ByPassAddMorpFilt = 0;
 
 % recursive parameters
 recurPara.MElayer = 0;
@@ -45,6 +44,8 @@ recurPara.IsDebug = 1;
 %% Deriving ObjMasks
 % first layer ObjMask
 segpara.QuadTreeMode = 0; % No need to do quadtree for the first layer
+% para.tauModel = 'AFFINE';
+para.tauModel = 'HOMOGRAPHY';
 [predFrameSrc, errFrameSrc, ~, objMaskL1, ~] = SolveL1MErecursive(src, ref, para, segpara, recurPara);
 
 % second layer ObjMask
@@ -53,7 +54,7 @@ recurPara.maskMode = 1;
 recurPara.objMask = objMaskL1;
 % assign smaller percentage at object level
 recurPara.inlier_cnt_percent = 0.85; recurPara.max_recur = 15; % recurPara.thresh_outlier = 8;
-segpara.QuadTreeMode = 1;
+% segpara.QuadTreeMode = 1;
 segpara.ByPassAddMorpFilt = 0; % at finer object level, use additional morphological filtering to fill
 para.tauModel = 'HOMOGRAPHY';
 [predFrameSrcL2, errFrameSrcL2, ~, objMaskL2, qTreeCent] = SolveL1MErecursive(src, predFrameSrc, para, segpara, recurPara);
@@ -62,7 +63,7 @@ para.tauModel = 'HOMOGRAPHY';
 %% Deriving first layer tau
 recurPara.maskMode = 0; 
 recurPara.MElayer = 0;
-para.tauModel = 'AFFINE';
+% para.tauModel = 'AFFINE';
 [predFrame, ~, tauL0, ~, ~] = SolveL1MErecursive(inc, src, para, segpara, recurPara);
 
 % simple inpainting for the out-of-boundary region by src 
@@ -97,35 +98,23 @@ para.tauModel = 'HOMOGRAPHY';
 for objIdx = 1:length(objMaskL1),
     qTree = qTreeCent{objIdx};
     objMaskL1sub = objMaskL1{objIdx};
-    objMaskL2sub = objMaskL2{objIdx};
+    
+    % Copy whatever has already done
+    if objIdx==1,
+        predL1 = predFrame;
+    else
+        predL1 = predFrameL1;
+    end
+    
+    % Check whether it is a quad-tree split
     if isempty(qTree),
-        % non split mode, directly apply objMask and objMaskL2
+        % non split mode, directly apply objMask
         recurPara.MElayer = 1;
         recurPara.objMask = {objMaskL1sub};
-        if objIdx==1,
-            predL1 = predFrame;
-        else
-            predL1 = predFrameL1;
-        end
-        [predFrameL1, ~, tauL1, ~, ~] = SolveL1MErecursive(inc, predL1, para, segpara, recurPara);
+        [predFrameL1, ~, tauL1{objIdx}, ~, ~] = SolveL1MErecursive(inc, predL1, para, segpara, recurPara);
         
-        if ~isempty(objMaskL2sub),
-            if objIdx==1,
-                predL2 = predFrameL1;
-                predFrameL2 = predFrameL1;
-            else
-                predL2 = predFrameL2;
-                % inherits the Layer 1 result
-                predL2(logical(objMaskL1sub)) = predFrameL1(logical(objMaskL1sub));
-            end
-            recurPara.MElayer = 2;
-            recurPara.objMask = objMaskL2sub;
-            [predFrameL2, ~, tauL2, ~, ~] = SolveL1MErecursive(inc, predL2, para, segpara, recurPara);
-        else
-            predFrameL2 = predFrameL1;
-        end
     else
-        % split mode
+        % quad-tree split mode
         Xcentroid = qTree(1); Ycentroid = qTree(2);
         Xstart = [1 1 Xcentroid+1 Xcentroid+1];
         Xend = [Xcentroid Xcentroid height height];
@@ -140,29 +129,40 @@ for objIdx = 1:length(objMaskL1),
         curr_objMaskQuad{3}(Xcentroid+1:end,1:Ycentroid) = objMaskL1sub(Xcentroid+1:end,1:Ycentroid);
         curr_objMaskQuad{4}(Xcentroid+1:end,Ycentroid+1:end) = objMaskL1sub(Xcentroid+1:end,Ycentroid+1:end);
         
-        % save tauL1 per quadrant as well
-        if objIdx==1,
-            predL1 = predFrame;
-        else
-            predL1 = predFrameL1;
-        end
-            
         % Now apply each one successively
         recurPara.MElayer = 1;
         recurPara.objMask = curr_objMaskQuad;
         [predFrameL1, ~, currL1, ~, ~] = SolveL1MErecursive(inc, predL1, para, segpara, recurPara);
         tauL1{objIdx} = currL1;
         
-        % Once L1 is done, go for L2, and apply for each quadrant as well
-        currL2 = cell(4,1);
-        if objIdx==1,
-            predL2 = predFrameL1;
-            predFrameL2 = predFrameL1;
-        else
-            predL2 = predFrameL2;
-            % inherits the Layer 1 result
-            predL2(logical(objMaskL1sub)) = predFrameL1(logical(objMaskL1sub));
+    end
+end
+errFrameL1 = inc - predFrameL1;
+
+for objIdx = 1:length(objMaskL1),
+    % Go on for the second object layer
+    qTree = qTreeCent{objIdx};    
+    objMaskL2sub = objMaskL2{objIdx};
+    
+    % For first object in L2, initiate the frames
+    if objIdx==1,
+        predL2 = predFrameL1;
+        predFrameL2 = predFrameL1;
+    else
+        predL2 = predFrameL2;
+    end
+    
+    if isempty(qTree),
+        % non split mode, directly apply objMaskL2        
+        if ~isempty(objMaskL2sub),
+            recurPara.MElayer = 2;
+            recurPara.objMask = objMaskL2sub;
+            [predFrameL2, ~, tauL2{objIdx}, ~, ~] = SolveL1MErecursive(inc, predL2, para, segpara, recurPara);
         end
+        
+    else
+        % split mode, go for each quadrant as well
+        currL2 = cell(4,1);
         
         for qIdx = 1:4,
             recurPara.MElayer = 2;
@@ -175,8 +175,6 @@ for objIdx = 1:length(objMaskL1),
         end
         tauL2{objIdx} = currL2;
         
-        
     end
 end
-errFrameL1 = inc - predFrameL1;
 errFrameL2 = inc - predFrameL2;

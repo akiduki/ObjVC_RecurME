@@ -17,7 +17,7 @@ function [predFrame, errFrame, tau, objMask, qTreeCent] = SolveL1MErecursive(src
 %    .inlier_cnt_percent - threshold on percentage of inlier pixels
 %    .max_recur          - maximum number of recursives allowed
 %    .Y_channel          - ==1 means Y_channel, for UV use 0
-%    .objMask/boundingbox- bounding box and corresponding objMask at sub-frame level
+%    .objMask            - object binary mask, same size as input frame
 %    .transform          - transform is only used for U/V channels
 % Outputs:
 % 1) predFrame    - the motion compensated frame
@@ -71,14 +71,13 @@ if Y_channel == 1,
             % bounding box mode, needs derive bounding box from err
             warning('DERIVING BOUNDING BOX MODE ENABLED!');
             warning('CHECK WHETHER THE INPUTS ARE RECONSTRUCTED FRAME!');
-            [~, boundingbox, Mask] = postprocessing(srcFrame, err, segPara);
+            Mask = postprocessing(srcFrame, err, segPara);
             se = strel('disk', dilate_width);
             for i=1:length(Mask);
                 objMask{i} = imdilate(Mask{i}, se);
             end
         else
             objMask = [];
-            boundingbox = [];
         end
         
         % outputs the result
@@ -144,8 +143,8 @@ if Y_channel == 1,
                         errMask{i} = err{i}.*curr_objMaskQuad{i};
                         currFrameObjMask = srcFrame.*curr_objMaskQuad{i};
                         % for Quad-tree, needs siginificantly smaller Conn_area
-                        segPara.Conn_area = 400;
-                        [~, boundingboxQuad, MaskQuad] = postprocessing(currFrameObjMask, errMask{i}, segPara);
+                        segPara.Conn_area = 500;
+                        MaskQuad = postprocessing(currFrameObjMask, errMask{i}, segPara);
 %                         for ii=1:length(boundingboxQuad),
 %                             boundingboxQuad{ii}(1) = boundingboxQuad{ii}(1) + curr_boundingbox(1);
 %                             boundingboxQuad{ii}(3) = boundingboxQuad{ii}(3) + curr_boundingbox(3);
@@ -155,7 +154,6 @@ if Y_channel == 1,
                             MaskQuad{ii} = imdilate(MaskQuad{ii}, se);
                         end
                         
-                        boundingboxSub{i} = boundingboxQuad;
                         MaskSub{i} = MaskQuad;
                     end
                     
@@ -175,7 +173,7 @@ if Y_channel == 1,
                     errMask = err.*curr_objMask;
                     srcFrameObjMask = srcFrame.*curr_objMask;
                     segPara.Conn_area = 500;
-                    [~, boundingboxSub, MaskSub] = postprocessing(srcFrameObjMask, errMask, segPara);
+                    MaskSub = postprocessing(srcFrameObjMask, errMask, segPara);
                     
                     se = strel('disk', dilate_width);
                     for i=1:length(MaskSub);
@@ -186,14 +184,12 @@ if Y_channel == 1,
                 
                 % save it according to the original organizations
                 tau{objID} = transform;
-                boundingbox{objID} = boundingboxSub;
                 objMask{objID} = MaskSub;
                 qTreeCent{objID} = quadtreeFlag;
             else
                 % store the tau
                 tau{objID} = transform;
                 objMask = [];
-                boundingbox = [];
             end
         end
         % output error frame

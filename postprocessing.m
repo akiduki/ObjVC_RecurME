@@ -3,7 +3,7 @@
 % Video Lab @ New York University, School of Engineering
 %
 % This Program will ...
-% Inputs: 
+% Inputs: (NOW ONLY RETURNS MASK, NEEDS MODIFICATION FOR THE LINES DOWN)
 % 1. Current Frame: "Y_Frame"
 % 2. Sparse Foreground Image: "E"
 % 3. Parameter Configuration: "parameters" a struct containing the following fields
@@ -19,7 +19,7 @@
 % * in the case of multiple objects, all three outputs are cell arrays.
 % ===============================================================================================
 
-function [Y_SubFrame, bounding_box_info, Mask] = postprocessing(Y_Frame, E, parameters)
+function Mask = postprocessing(Y_Frame, E, parameters)
 
 if isfield(parameters,'ByPassFilling'),
     ByPassFilling = parameters.ByPassFilling;
@@ -84,8 +84,8 @@ end
 
 % Image Morphological Processing
 if ~ByPassAddMorpFilt,
-	E3 = imdilate(Ethr,strel('square',3));
-	E3 = imerode(E3,strel('square',3));
+    E3 = imclose(Ethr,strel('disk',2));
+%     E3 = imclose(Ethr,strel('square',3));
 else
 	E3 = Ethr;
 end
@@ -110,80 +110,15 @@ E4(:,end-stripe_removal_threshold+1:end) = 0;
 E5 = bwlabel(E4,connectivity_neighbor_num);
 
 % Region Extraction and Bounding Box Generation
-coordinate = regionprops(E5,'BoundingBox');
+% coordinate = regionprops(E5,'BoundingBox');
+% subMaskImage = regionprops(E5,'Image');
+MaskIdxList = regionprops(E5,'PixelIdxList');
 % Return if no object
-if isempty(coordinate),
+if isempty(MaskIdxList),
     disp('No object found!');
-    Y_SubFrame = [];
-    bounding_box_info = [];
     Mask = [];
     return;
 end
-
-for i=1:length(coordinate)
-    currBB = coordinate(i).BoundingBox;
-    % Add margin and check boundary
-    bxStart(i) = max([1, round(currBB(1))-bb_margin]);
-    byStart(i) = max([1, round(currBB(2))-bb_margin]);
-    bxEnd = min([Col, bxStart(i)+round(currBB(3))+2*bb_margin-1]);
-    byEnd = min([Row, byStart(i)+round(currBB(4))+2*bb_margin-1]);
-    bwidth(i) = bxEnd - bxStart(i) + 1;
-    bheight(i) = byEnd - byStart(i) + 1;
-    bounding_box_info{i} = [byStart(i) bxStart(i) bheight(i) bwidth(i)];
-end
-if IsDebugging
-	for ii = 1:length(coordinate)
-% 		figure;imshow(totalMask{ii},[]);title(strcat('Mask Calculation for Object ', num2str(ii)));
-		print(gcf,'-dpng',strcat('Mask_',num2str(ii),'.png'));
-% 		figure;imshow(totalMask{ii}.*Y_Frame,[]);title(strcat('Masked Area for Object ', num2str(ii)));
-		print(gcf,'-dpng',strcat('SubFrame_',num2str(ii),'.png'));
-	end
-end
-
-% % Now check every possible merge of objects
-% mergeMat = zeros(length(coordinate));
-% for i=1:length(coordinate)-1,
-%     for j=i+1:length(coordinate),
-%         tmp = totalMask{i}.*totalMask{j};
-%         if sum(tmp(:))~=0 && i~=j,
-%             mergeMat(i,j) = 1;
-%         end
-%     end
-% end
-% % merge the overlapping bounding boxes
-% mergedID = []; % all merged object ID
-% pos = 1;
-% for i=1:length(coordinate),
-%     mergeLoc = find(mergeMat(i,:)==1);    
-%     if ~isempty(mergeLoc) && ~ismember(i,mergedID),
-%         mergedID = [mergedID mergeLoc];
-%         tmp = totalMask{i};
-%         for j=1:length(mergeLoc),
-%             tmp = tmp + totalMask{mergeLoc(j)};
-%         end
-%         tmp(tmp>1) = 1;
-%         mergecoords = regionprops(logical(tmp),'BoundingBox');
-%         % replace the bxStart, byStart, bwidth, and bheight accordingly
-%         bxFinal = mergecoords.BoundingBox(1);
-%         byFinal = mergecoords.BoundingBox(2);
-%         bwidthFinal = mergecoords.BoundingBox(3);
-%         bheightFinal = mergecoords.BoundingBox(4);
-%     elseif ~ismember(i,mergedID),
-%         % Non-merged mode
-%         bxFinal = bxStart(i);
-%         byFinal = byStart(i);
-%         bwidthFinal = bwidth(i);
-%         bheightFinal = bheight(i);
-%     else
-%         continue;
-%     end
-%     if bwidthFinal < stripe_removal_threshold || bheightFinal < stripe_removal_threshold,
-%         % get rid of stripe objects
-%         continue;
-%     end
-% 	bounding_box_info{pos} = [byFinal bxFinal bheightFinal bwidthFinal];
-%     pos = pos + 1;
-% end
 
 if ~ByPassFilling,
     % Hole Filling
@@ -201,27 +136,25 @@ else
     E6 = im2bw(E5);
 end
 
-objCnt = 1;
-for i=1:length(bounding_box_info),
+objCnt = 1; Mask = [];
+for i=1:length(MaskIdxList),
     Temp_Mask = zeros(Row, Col);
-    Temp_Mask(bounding_box_info{i}(1):bounding_box_info{i}(1)+bounding_box_info{i}(3)-1,...
-        bounding_box_info{i}(2):bounding_box_info{i}(2)+bounding_box_info{i}(4)-1) = 1;
-    if sum(Temp_Mask(:)==1) >= 1.5*connectivity_area && sum(Temp_Mask(:)==1) < 0.8*Row*Col,
-        E7 = E6.* Temp_Mask;
-        Y_SubFrame{objCnt} = Y_Frame(bounding_box_info{i}(1):bounding_box_info{i}(1)+bounding_box_info{i}(3)-1,...
-        bounding_box_info{i}(2):bounding_box_info{i}(2)+bounding_box_info{i}(4)-1);
-%     Mask{i} = E7(bounding_box_info{i}(1):bounding_box_info{i}(1)+bounding_box_info{i}(3)-1,...
-%         bounding_box_info{i}(2):bounding_box_info{i}(2)+bounding_box_info{i}(4)-1);
-% Modified 01/05/2016 - Mask is now always the original frame size
-        Mask{objCnt} = E7;
+    % Copy only the masked pixels in
+    Temp_Mask(MaskIdxList(i).PixelIdxList) = 1;
+    if sum(Temp_Mask(:)==1) >= connectivity_area && sum(Temp_Mask(:)==1) < 0.8*Row*Col,
+        Mask{objCnt} = Temp_Mask;
         objCnt = objCnt + 1;
     end
 end
+
+if isempty(Mask),
+    disp('No object found!');
+    return;
+end
+
 if IsDebugging
 	% for ii = 1:length(bxFinal)
-	for ii = 1:length(bounding_box_info) % Added on 2015/11/07
-		figure;imshow(Y_SubFrame{ii},[]);title(strcat('SubFrame for Object ',num2str(ii))); size(Y_SubFrame{ii})
-		print(gcf,'-dpng',strcat('SubFrame_Object_',num2str(ii),'.png'));
+	for ii = 1:length(MaskIdxList) % Added on 2015/11/07
 		figure;imshow(Mask{ii},[]);title(strcat('SubFrame Mask for object', num2str(ii))); size(Mask{ii})
 		print(gcf,'-dpng',strcat('SubFrame_Mask_',num2str(ii),'.png'));
 	end
