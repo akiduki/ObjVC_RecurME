@@ -1,10 +1,10 @@
 %% Testing recursiveME
 % close all; 
 clear all;
-% load('./Data/Stefan_3_Frames.mat');
-load('./Data/Office1_QP22.mat'); src = double(Ymtx_Cur);ref = double(Ymtx_Ref);inc = double(Ymtx_Inc); 
+load('./Data/Stefan_3_Frames.mat');
+% load('./Data/Office1_QP22.mat'); src = double(Ymtx_Cur);ref = double(Ymtx_Ref);inc = double(Ymtx_Inc); 
 % load('./Data/City_QP22.mat'); Y_Cur = Record.Current_Frame_Y; Y_Ref = Record.Reference_Frame_Y; Y_Inc = Record.Incoming_Frame_Y;
-% src = double(Y_Cur);ref = double(Y_Ref);inc = double(Y_Inc);
+src = double(Y_Cur);ref = double(Y_Ref);inc = double(Y_Inc);
 [height, width] = size(src);
 totPix = height*width;
 
@@ -23,18 +23,12 @@ para.verbose = 1; % show debug info
 
 % segmentation parameters, used only when maskMode==1
 segpara.Debugging_Enabled = 0;
-% segpara.Conn_area = round(0.02*height*width); % now is the absolute pixel count
-segpara.Conn_area = round(0.01*height*width);
-segpara.ConfThrLo = 5; % 5 for other sequences, 8 for city
 segpara.QP = 22;
 segpara.Displacement = 5;
 segpara.channel = 1;
 segpara.ByPassFilling = 1;
-segpara.ByPassAddMorpFilt = 0;
 
 % recursive parameters
-recurPara.MElayer = 0;
-recurPara.maskMode = 1;
 recurPara.thresh_outlier = 10; % threshold on error level for determining outlier pixels
 recurPara.inlier_cnt_percent = 0.85; % percentage of inlier pixels
 recurPara.max_recur = 5; 
@@ -43,9 +37,14 @@ recurPara.IsDebug = 1;
 
 %% Deriving ObjMasks
 % first layer ObjMask
+recurPara.MElayer = 0; 
+recurPara.maskMode = 1;
 segpara.QuadTreeMode = 0; % No need to do quadtree for the first layer
-% para.tauModel = 'AFFINE';
-para.tauModel = 'HOMOGRAPHY';
+segpara.ByPassAddMorpFilt = 0;
+segpara.Conn_area = round(0.005*height*width); % or 0.01/0.02, here is the absolute number of pixels now
+segpara.ConfThrLo = 5; % 5 for other sequences, 8 for city
+para.tauModel = 'AFFINE';
+% para.tauModel = 'HOMOGRAPHY';
 [predFrameSrc, errFrameSrc, ~, objMaskL1, ~] = SolveL1MErecursive(src, ref, para, segpara, recurPara);
 
 % second layer ObjMask
@@ -54,16 +53,20 @@ recurPara.maskMode = 1;
 recurPara.objMask = objMaskL1;
 % assign smaller percentage at object level
 recurPara.inlier_cnt_percent = 0.85; recurPara.max_recur = 15; % recurPara.thresh_outlier = 8;
-% segpara.QuadTreeMode = 1;
+segpara.QuadTreeMode = 1;
 segpara.ByPassAddMorpFilt = 0; % at finer object level, use additional morphological filtering to fill
+segPara.Conn_area = 100; % for Quad-tree, needs siginificantly smaller Conn_area
+segpara.ConfThrLo = 4;
 para.tauModel = 'HOMOGRAPHY';
 [predFrameSrcL2, errFrameSrcL2, ~, objMaskL2, qTreeCent] = SolveL1MErecursive(src, predFrameSrc, para, segpara, recurPara);
+
+% third layer ObjMask
 
 % Now derives the predicted frame for the incoming frames
 %% Deriving first layer tau
 recurPara.maskMode = 0; 
 recurPara.MElayer = 0;
-% para.tauModel = 'AFFINE';
+para.tauModel = 'AFFINE';
 [predFrame, ~, tauL0, ~, ~] = SolveL1MErecursive(inc, src, para, segpara, recurPara);
 
 % simple inpainting for the out-of-boundary region by src 

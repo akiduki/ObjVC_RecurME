@@ -142,8 +142,7 @@ if Y_channel == 1,
                     for i=1:4, %<---- hard coded 4 here
                         errMask{i} = err{i}.*curr_objMaskQuad{i};
                         currFrameObjMask = srcFrame.*curr_objMaskQuad{i};
-                        % for Quad-tree, needs siginificantly smaller Conn_area
-                        segPara.Conn_area = 500;
+                        
                         MaskQuad = postprocessing(currFrameObjMask, errMask{i}, segPara);
 %                         for ii=1:length(boundingboxQuad),
 %                             boundingboxQuad{ii}(1) = boundingboxQuad{ii}(1) + curr_boundingbox(1);
@@ -245,7 +244,7 @@ end
 end
 
 % Nested function for recursive ME
-function [err, transform, inlier_objMask, quadtreePart] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode)
+function [pred, err, transform, inlier_objMask, quadtreePart] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode)
 % TO-DO: update inlier_objMask within the area object mask defined.
 originalObjMask = L1solverPara.objMask; % sub-frame object region
 obj_idx = find(originalObjMask(:)==1);
@@ -350,10 +349,10 @@ while ~IsConverged,
                     
                     % apply transform to all image pixels
                     Tfm = fliptform(maketform('projective',tQuad'));
-                    pred = imtransform(refFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
+                    predQuad = imtransform(refFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
                         'UData', xdata, 'VData', ydata, 'Size', imgSize);
                     % new error image
-                    errQuad = srcFrame - pred;
+                    errQuad = srcFrame - predQuad;
                     
                     % Convergence check
                     inlier_idx = find(abs(errQuad(:))<thresh_outlier);
