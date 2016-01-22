@@ -60,14 +60,14 @@ if Y_channel == 1,
         % Global ME level, the mask is set to all 1 by default.
         L1solverPara.objMask = ones(height, width);
         % Calling the lern2frmtau for the first time to derive outliers
-        [transform, err, pred, ~] = lern2frmtau(srcFrame, refFrame, L1solverPara);
+        [transform, err, pred] = lern2frmtau(srcFrame, refFrame, L1solverPara);
         
         % for deriving bounding box, shall do ME recursively
         if maskMode,
             % Define the transform origin
             imgSize = [height, width];
             
-            [err, transform] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode);
+            [transform, err, pred] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode);
             % bounding box mode, needs derive bounding box from err
             warning('DERIVING BOUNDING BOX MODE ENABLED!');
             warning('CHECK WHETHER THE INPUTS ARE RECONSTRUCTED FRAME!');
@@ -98,14 +98,15 @@ if Y_channel == 1,
             imgSize = size(srcFrame);
             L1solverPara.objMask = curr_objMask;
             % Calling the lern2frmtau
-            [transform, err, pred, ~] = lern2frmtau(srcFrame, refFrame, L1solverPara);
+            [transform, err, pred] = lern2frmtau(srcFrame, refFrame, L1solverPara);
             
             % Put each piece back to the reconstructed whole frame
-            [objLocX, objLocY] = find(curr_objMask==1);
-            for i=1:length(objLocX), % NOT AN EFFICIENT SOLUTION
-                predFrame(objLocX(i), objLocY(i)) = ...
-                    pred(objLocX(i),objLocY(i));
-            end
+            predFrame(curr_objMask(:)==1) = pred(curr_objMask(:)==1);
+%             [objLocX, objLocY] = find(curr_objMask==1);
+%             for i=1:length(objLocX), % NOT AN EFFICIENT SOLUTION
+%                 predFrame(objLocX(i), objLocY(i)) = ...
+%                     pred(objLocX(i),objLocY(i));
+%             end
             
             % for deriving bounding box, use recursive ME
             if maskMode,
@@ -113,9 +114,8 @@ if Y_channel == 1,
                     errOld = err; % store the old error for comparison only
                 end
                 
-%                 L1solverPara.objMask = ones(imgSize(1), imgSize(2));
-%                 [transform, err, pred, ~] = lern2frmtau(srcFrame, refFrame, L1solverPara);
-                [err, transform, inlier_objMask, quadtreeFlag] = ...
+                predFrame = refFrame;
+                [transform, err, pred, inlier_objMask, quadtreeFlag] = ...
                     computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode);
                 
                 % bounding box mode, needs derive bounding box from err
@@ -154,6 +154,9 @@ if Y_channel == 1,
                         end
                         
                         MaskSub{i} = MaskQuad;
+                        
+                        % update predFrame by current quadrants
+                        predFrame(curr_objMaskQuad{i}(:)==1) = pred(curr_objMaskQuad{i}(:)==1);
                     end
                     
                     if IsDebug,
@@ -178,6 +181,9 @@ if Y_channel == 1,
                     for i=1:length(MaskSub);
                         MaskSub{i} = imdilate(MaskSub{i}, se);
                     end
+                    
+                    % update predFrame by new inlier mask
+                    predFrame(inlier_objMask(:)==1) = pred(inlier_objMask(:)==1);
                     
                 end
                 
@@ -244,8 +250,9 @@ end
 end
 
 % Nested function for recursive ME
-function [pred, err, transform, inlier_objMask, quadtreePart] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode)
+function [transform, err, predFrame, inlier_objMask, quadtreePart] = computeRecursiveME(srcFrame, refFrame, err, L1solverPara, thresh_outlier, inlier_cnt_percent, max_recur, imgSize, QuadTreeMode)
 % TO-DO: update inlier_objMask within the area object mask defined.
+predFrame = refFrame;
 originalObjMask = L1solverPara.objMask; % sub-frame object region
 obj_idx = find(originalObjMask(:)==1);
 obj_pix_cnt = length(obj_idx);
@@ -276,7 +283,8 @@ while ~IsConverged,
     pred = imtransform(refFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
         'UData', xdata, 'VData', ydata, 'Size', imgSize);
     % new error image
-    err = srcFrame - pred;
+    predFrame(obj_idx) = pred(obj_idx);
+    err = srcFrame - predFrame;
     
     % Convergence check
     inlier_idx = find(abs(err(:))<thresh_outlier);
@@ -306,6 +314,8 @@ while ~IsConverged,
             [inlier_objMask_quad{:}] = deal(zeros(imgSize(1),imgSize(2)));
             [originalObjMask_quad{:}] = deal(zeros(imgSize(1),imgSize(2)));
             
+            predFrameQuad = refFrame;
+            
             % Now spilt into four quadrants
             disp('Quad-tree split occured!')
             inlier_objMask_quad{1}(1:Xcentroid,1:Ycentroid) = inlier_objMask(1:Xcentroid,1:Ycentroid);
@@ -316,16 +326,6 @@ while ~IsConverged,
             originalObjMask_quad{2}(1:Xcentroid,Ycentroid+1:end) = originalObjMask(1:Xcentroid,Ycentroid+1:end);
             originalObjMask_quad{3}(Xcentroid+1:end,1:Ycentroid) = originalObjMask(Xcentroid+1:end,1:Ycentroid);
             originalObjMask_quad{4}(Xcentroid+1:end,Ycentroid+1:end) = originalObjMask(Xcentroid+1:end,Ycentroid+1:end);
-            % Even at quat-tree level, input shall be the same as the
-            % original image size
-%             srcFrame_quad{1} = srcFrame(1:Xcentroid,1:Ycentroid);
-%             srcFrame_quad{2} = srcFrame(1:Xcentroid,Ycentroid+1:end);
-%             srcFrame_quad{3} = srcFrame(Xcentroid+1:end,1:Ycentroid);
-%             srcFrame_quad{4} = srcFrame(Xcentroid+1:end,Ycentroid+1:end);
-%             refFrame_quad{1} = refFrame(1:Xcentroid,1:Ycentroid);
-%             refFrame_quad{2} = refFrame(1:Xcentroid,Ycentroid+1:end);
-%             refFrame_quad{3} = refFrame(Xcentroid+1:end,1:Ycentroid);
-%             refFrame_quad{4} = refFrame(Xcentroid+1:end,Ycentroid+1:end);
             
             % do it for each quadrant
             for i=1:4,
@@ -352,7 +352,8 @@ while ~IsConverged,
                     predQuad = imtransform(refFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
                         'UData', xdata, 'VData', ydata, 'Size', imgSize);
                     % new error image
-                    errQuad = srcFrame - predQuad;
+                    predFrameQuad(obj_idx) = predQuad(obj_idx); %############################
+                    errQuad = srcFrame - predFrameQuad;
                     
                     % Convergence check
                     inlier_idx = find(abs(errQuad(:))<thresh_outlier);
@@ -384,6 +385,8 @@ while ~IsConverged,
             end
             inlier_objMask = cell(4,1);
             inlier_objMask = inlier_objMask_quad;
+            
+            predFrame = predFrameQuad;
             break; % after processed the four quadrants, quit the loop
         end
         

@@ -54,7 +54,7 @@ recurPara.objMask = objMaskL1;
 % assign smaller percentage at object level
 recurPara.inlier_cnt_percent = 0.85; recurPara.max_recur = 15; % recurPara.thresh_outlier = 8;
 segpara.QuadTreeMode = 1;
-segpara.ByPassAddMorpFilt = 0; % at finer object level, use additional morphological filtering to fill
+segpara.ByPassAddMorpFilt = 1; % at finer object level, bypass additional morphological filtering
 segPara.Conn_area = 100; % for Quad-tree, needs siginificantly smaller Conn_area
 segpara.ConfThrLo = 4;
 para.tauModel = 'HOMOGRAPHY';
