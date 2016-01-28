@@ -42,9 +42,9 @@ qTreeCent = []; % quad-tree flag
 
 % Object segmentation parameters
 if isfield(segPara,'dilate_width'),
-    dilate_width = segPara.dilate_width;
+    min_dilate_width = segPara.dilate_width;
 else
-    dilate_width = 2;
+    min_dilate_width = 2;
 end
 QuadTreeMode = segPara.QuadTreeMode; % QuadTreeMode enabling flag
 
@@ -72,6 +72,7 @@ if Y_channel == 1,
             warning('DERIVING BOUNDING BOX MODE ENABLED!');
             warning('CHECK WHETHER THE INPUTS ARE RECONSTRUCTED FRAME!');
             Mask = postprocessing(srcFrame, err, segPara);
+            dilate_width = round(max([min_dilate_width max(abs(transform(1:2,3)'))]));
             se = strel('disk', dilate_width);
             for i=1:length(Mask);
                 objMask{i} = imdilate(Mask{i}, se);
@@ -89,12 +90,7 @@ if Y_channel == 1,
         % sub-frame object layers
         % crop the sub-frames from boundingbox
         for objID=1:length(recurPara.objMask),
-%             curr_boundingbox = recurPara.boundingbox{objID};
             curr_objMask = recurPara.objMask{objID};
-%             srcFrameObj = srcFrame(curr_boundingbox(1):curr_boundingbox(1)+curr_boundingbox(3)-1,...
-%                 curr_boundingbox(2):curr_boundingbox(2)+curr_boundingbox(4)-1);
-%             refFrameObj = refFrame(curr_boundingbox(1):curr_boundingbox(1)+curr_boundingbox(3)-1,...
-%                 curr_boundingbox(2):curr_boundingbox(2)+curr_boundingbox(4)-1);
             imgSize = size(srcFrame);
             L1solverPara.objMask = curr_objMask;
             % Calling the lern2frmtau
@@ -148,7 +144,7 @@ if Y_channel == 1,
 %                             boundingboxQuad{ii}(1) = boundingboxQuad{ii}(1) + curr_boundingbox(1);
 %                             boundingboxQuad{ii}(3) = boundingboxQuad{ii}(3) + curr_boundingbox(3);
 %                         end
-                        se = strel('disk', dilate_width);
+                        se = strel('disk', min_dilate_width);
                         for ii=1:length(MaskQuad);
                             MaskQuad{ii} = imdilate(MaskQuad{ii}, se);
                         end
@@ -174,10 +170,9 @@ if Y_channel == 1,
                     % further layers shall do on masked err only
                     errMask = err.*curr_objMask;
                     srcFrameObjMask = srcFrame.*curr_objMask;
-                    segPara.Conn_area = 500;
                     MaskSub = postprocessing(srcFrameObjMask, errMask, segPara);
                     
-                    se = strel('disk', dilate_width);
+                    se = strel('disk', min_dilate_width);
                     for i=1:length(MaskSub);
                         MaskSub{i} = imdilate(MaskSub{i}, se);
                     end
@@ -202,49 +197,37 @@ if Y_channel == 1,
     end
 else
     % for U/V frames, apply transform only
+    imgSize = [height, width];
+    xdata = [1 imgSize(2)] - ceil(imgSize(2)/2);
+    ydata = [1 imgSize(1)] - ceil(imgSize(1)/2);
+    
     warning('U/V channel mode, transform and bounding box shall be scaled already!');
     if MElayer==0,
         transform = recurPara.transform;
-        imgSize = [height, width];
-        xdata = [1 imgSize(2)] - ceil(imgSize(2)/2);
-        ydata = [1 imgSize(1)] - ceil(imgSize(1)/2);
         % apply transform to all image pixels
         Tfm = fliptform(maketform('projective',transform'));
-        predFrame = imtransform(srcFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
+        predFrame = imtransform(refFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
             'UData', xdata, 'VData', ydata, 'Size', imgSize);
-        errFrame = refFrame - predFrame;
-        tau = transform;
+        errFrame = srcFrame - predFrame;
+        tau = [];
         objMask = [];
-        boundingbox = [];
     else
         predFrame = refFrame;
         % sub-frame object layers
         % crop the sub-frames from boundingbox
         for objID=1:length(recurPara.objMask),
-            boundingbox = recurPara.boundingbox{objID};
-            objMask = recurPara.objMask{objID};            
-            transform = recurPara.transform{objID}; 
-            % Put each piece back to the reconstructed whole frame
-            [objLocX, objLocY] = find(objMask==1);     
+            curr_objMask = recurPara.objMask{objID};
+            curr_transform = recurPara.transform{objID};  
             
-            srcFrameObj = srcFrame(boundingbox(1):boundingbox(1)+boundingbox(3)-1,...
-                boundingbox(2):boundingbox(2)+boundingbox(4)-1);
-            refFrameObj = refFrame(boundingbox(1):boundingbox(1)+boundingbox(3)-1,...
-                boundingbox(2):boundingbox(2)+boundingbox(4)-1);
-            imgSize = size(srcFrameObj);
-            xdata = [1 imgSize(2)] - ceil(imgSize(2)/2); % for sub-frame object, transform center is the sub-frame center
-            ydata = [1 imgSize(1)] - ceil(imgSize(1)/2);
-            Tfm = fliptform(maketform('projective',transform'));
-            pred = imtransform(srcFrameObj, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
+            Tfm = fliptform(maketform('projective',curr_transform'));
+            pred = imtransform(refFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
                 'UData', xdata, 'VData', ydata, 'Size', imgSize);
             
-            for i=1:length(objLocX), % NOT AN EFFICIENT SOLUTION
-                predFrame(objLocX(i)+boundingbox(1)-1, objLocY(i)+boundingbox(2)-1) = ...
-                    pred(objLocX(i),objLocY(i));
-            end
+            predFrame(curr_objMask==1) = pred(curr_objMask==1);
         end
-        errFrame = refFrame - predFrame;
-        tau = recurPara.transform;
+        errFrame = srcFrame - predFrame;
+        tau = [];
+        objMask = [];
     end
 end
 end
@@ -297,7 +280,7 @@ while ~IsConverged,
         % not converged
         inlier_objMask = zeros(imgSize(1),imgSize(2));
         inlier_objMask(inlier_obj_idx) = 1;
-        if (inlier_ratio-prev_inlier_ratio)*obj_pix_cnt <= 10 && QuadTreeMode,
+        if (inlier_ratio-prev_inlier_ratio)*obj_pix_cnt <= 10 && QuadTreeMode && obj_pix_cnt >= 1600,
             % check whether there is a significant amount of pixel changes
             % if not, partition into quad-tree
             
@@ -361,7 +344,7 @@ while ~IsConverged,
                     inlier_cnt = length(inlier_obj_idx);
                     inlier_ratio = inlier_cnt/obj_pix_cnt;
                     
-                    if inlier_ratio >= inlier_cnt_percent,
+                    if inlier_ratio >= inlier_cnt_percent || (prev_inlier_ratio-inlier_ratio) < 0.005, % <======= less than 0.5% change
                         IsConverged = true;
                     else
                         % not converged, update the inlier objMask

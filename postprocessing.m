@@ -49,10 +49,10 @@ end
 [Row, Col] = size(Y_Frame);
 % Constants
 % morphological_processing_window_size = 0;
-connectivity_neighbor_num = 4;
+connectivity_neighbor_num = 8;
 bb_marginLo = 5;
 if ~QuadTreeMode,
-    stripe_removal_threshold = 8; 	% Remove narrow stripe
+    stripe_removal_threshold = 6; 	% Remove narrow stripe
 %     stripe_removal_threshold = 3;
 else
     stripe_removal_threshold = 0;
@@ -65,7 +65,7 @@ end
 
 % Parameters
 fg_threshold = max([fg_thrLo, 2^((parameters.QP-4)/6)/2]);
-bb_margin = max([bb_marginLo, 1.2*parameters.Displacement]);
+% bb_margin = max([bb_marginLo, 1.2*parameters.Displacement]);
 IsDebugging = parameters.Debugging_Enabled;
 % connectivity_area = round(parameters.Conn_percent * (Row*Col)); % 0.01
 connectivity_area = parameters.Conn_area;
@@ -74,7 +74,7 @@ connectivity_area = parameters.Conn_area;
 % Confidence Thresholding
 Ethr = E;
 Ethr((abs(E)<=fg_threshold)) = 0;
-Ethr((abs(E)>fg_threshold)) = 255;
+Ethr((abs(E)>fg_threshold)) = 1;
 if IsDebugging
 	close all;
 	figure;imshow(E,[]);title('TP1 - Original Error Image'); close all;
@@ -84,8 +84,10 @@ end
 
 % Image Morphological Processing
 if ~ByPassAddMorpFilt,
-    E3 = imclose(Ethr,strel('disk',2));
-%     E3 = imclose(Ethr,strel('square',3));
+%     E3 = imdilate(logical(Ethr),strel('square',3));
+%     E3 = imerode(E3,strel('disk',2));
+    E3 = imclose(logical(Ethr),strel('disk',2));
+%     E3 = imclose(logical(Ethr),strel('square',3));
 else
 	E3 = Ethr;
 end
@@ -141,7 +143,7 @@ for i=1:length(MaskIdxList),
     Temp_Mask = zeros(Row, Col);
     % Copy only the masked pixels in
     Temp_Mask(MaskIdxList(i).PixelIdxList) = 1;
-    if sum(Temp_Mask(:)==1) >= connectivity_area && sum(Temp_Mask(:)==1) < 0.8*Row*Col,
+    if sum(Temp_Mask(:)==1) >= 0.5*connectivity_area && sum(Temp_Mask(:)==1) < 0.8*Row*Col,
         Mask{objCnt} = Temp_Mask;
         objCnt = objCnt + 1;
     end
