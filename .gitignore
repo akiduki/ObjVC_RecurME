@@ -30,6 +30,7 @@
 *.sqlite
 *.xlsx
 *.xls
+*.yuv
 
 # OS generated files #
 ######################
