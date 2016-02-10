@@ -87,6 +87,7 @@ if ~ByPassAddMorpFilt,
 %     E3 = imdilate(logical(Ethr),strel('square',3));
 %     E3 = imerode(E3,strel('disk',2));
     E3 = imclose(logical(Ethr),strel('disk',2));
+    E3 = imopen(E3,strel('disk',2));
 %     E3 = imclose(logical(Ethr),strel('square',3));
 else
 	E3 = Ethr;

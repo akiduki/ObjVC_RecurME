@@ -1,8 +1,10 @@
-%% Testing recursiveME
+%% RecursiveME for Object Video Coding Project
+% Yuanyi Xue @ NYU-Poly
 % close all; 
 clear all;
 
-seqName = {'Stefan', 'Office1', 'City', 'Football'};
+% seqName = {'Stefan', 'Office1', 'City', 'Football'};
+seqName = {'Stefan'};
 QP = [22 27 32 37];
 
 for seqID = 1:length(seqName),
@@ -51,7 +53,7 @@ for seqID = 1:length(seqName),
         segpara.ByPassAddMorpFilt = 0;
         % segpara.Conn_area = round(0.005*height*width); % or 0.01/0.02, here is the absolute number of pixels now
         segpara.Conn_area = 500;
-        segpara.ConfThrLo = 6; % 5 for other sequences, 8 for city
+        segpara.ConfThrLo =  10; % 8 for city 6;
         % para.tauModel = 'AFFINE';
         para.tauModel = 'HOMOGRAPHY';
         [predFrameSrc, errFrameSrc, ~, objMaskL1, ~] = SolveL1MErecursive(src, ref, para, segpara, recurPara);
@@ -369,15 +371,15 @@ for seqID = 1:length(seqName),
         errFrameL2V = incV - predFrameL2V;
         
         % re-cast the error frame back to uint8 for HEVC coding
-        errFrame_uint8 = uint8( round((errFrame + 255)/2) );
-        errFrameL1_uint8 = uint8( round((errFrameL1 + 255)/2) );
-        errFrameL2_uint8 = uint8( round((errFrameL2 + 255)/2) );
-        errFrameU_uint8 = uint8( round((errFrameU + 255)/2) );
-        errFrameL1U_uint8 = uint8( round((errFrameL1U + 255)/2) );
-        errFrameL2U_uint8 = uint8( round((errFrameL2U + 255)/2) );
-        errFrameV_uint8 = uint8( round((errFrameV + 255)/2) );
-        errFrameL1V_uint8 = uint8( round((errFrameL1V + 255)/2) );
-        errFrameL2V_uint8 = uint8( round((errFrameL2V + 255)/2) );
+        errFrame_uint8 = uint8( dzquantRecon(errFrame,2)/2 + 128 );
+        errFrameL1_uint8 = uint8( dzquantRecon(errFrameL1,2)/2 + 128 );
+        errFrameL2_uint8 = uint8( dzquantRecon(errFrameL2,2)/2 + 128 );
+        errFrameU_uint8 = uint8( dzquantRecon(errFrameU,2)/2 + 128 );
+        errFrameL1U_uint8 = uint8( dzquantRecon(errFrameL1U,2)/2 + 128 );
+        errFrameL2U_uint8 = uint8( dzquantRecon(errFrameL2U,2)/2 + 128 );
+        errFrameV_uint8 = uint8( dzquantRecon(errFrameV,2)/2 + 128 );
+        errFrameL1V_uint8 = uint8( dzquantRecon(errFrameL1V,2)/2 + 128 );
+        errFrameL2V_uint8 = uint8( dzquantRecon(errFrameL2V,2)/2 + 128 );
         
         % Write the frame back to YUV
         % 1) global layer
