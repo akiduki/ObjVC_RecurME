@@ -59,6 +59,7 @@ if Y_channel == 1,
     if MElayer == 0,
         % Global ME level, the mask is set to all 1 by default.
         L1solverPara.objMask = ones(height, width);
+        
         % Calling the lern2frmtau for the first time to derive outliers
         [transform, err, pred] = lern2frmtau(srcFrame, refFrame, L1solverPara);
         
@@ -92,23 +93,22 @@ if Y_channel == 1,
         for objID=1:length(recurPara.objMask),
             curr_objMask = recurPara.objMask{objID};
             imgSize = size(srcFrame);
-            L1solverPara.objMask = curr_objMask;
-            % Calling the lern2frmtau
-            [transform, err, pred] = lern2frmtau(srcFrame, refFrame, L1solverPara);
+            xdata = [1 imgSize(2)] - ceil(imgSize(2)/2);
+            ydata = [1 imgSize(1)] - ceil(imgSize(1)/2);
             
-            % Put each piece back to the reconstructed whole frame
-            predFrame(curr_objMask(:)==1) = pred(curr_objMask(:)==1);
-%             [objLocX, objLocY] = find(curr_objMask==1);
-%             for i=1:length(objLocX), % NOT AN EFFICIENT SOLUTION
-%                 predFrame(objLocX(i), objLocY(i)) = ...
-%                     pred(objLocX(i),objLocY(i));
-%             end
+            L1solverPara.objMask = curr_objMask;
             
             % for deriving bounding box, use recursive ME
             if maskMode,
                 if IsDebug,
                     errOld = err; % store the old error for comparison only
                 end
+                
+                % Calling the lern2frmtau, old version for maskMode
+                [transform, err, pred] = lern2frmtau(srcFrame, refFrame, L1solverPara);
+                
+                % Put each piece back to the reconstructed whole frame
+                predFrame(curr_objMask(:)==1) = pred(curr_objMask(:)==1);
                 
                 predFrame = refFrame;
                 [transform, err, pred, inlier_objMask, quadtreeFlag] = ...
@@ -187,6 +187,24 @@ if Y_channel == 1,
                 objMask{objID} = MaskSub;
                 qTreeCent{objID} = quadtreeFlag;
             else
+                % Calling the lern2frmtau for coding mode
+                % In coding mode, compute the tau inversely
+                [rr_tran, ~, pred] = lern2frmtau(refFrame, srcFrame, L1solverPara);
+                
+                % once get the transform, warp the mask to the source frame
+                fw_tran =  [rr_tran(1,1) -rr_tran(1,2) -rr_tran(1,3)*rr_tran(1,1)+rr_tran(2,3)*rr_tran(1,2)
+                           -rr_tran(2,1)  rr_tran(2,2) -rr_tran(2,3)*rr_tran(1,1)+rr_tran(1,3)*rr_tran(2,1)
+                            0             0             1];
+                % warp the current mask to the source frame
+                fw_trm = fliptform(maketform('projective',fw_tran'));
+                curr_objMaskT = imtransform(curr_objMask, fw_trm, 'nearest', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 1);
+                
+                %!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                % Modified here 
+                
+                
+                % Put each piece back to the reconstructed whole frame
+                predFrame(curr_objMask(:)==1) = pred(curr_objMask(:)==1);
                 % store the tau
                 tau{objID} = transform;
                 objMask = [];
