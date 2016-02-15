@@ -58,13 +58,16 @@ refFrame = double(refFrame);
 if Y_channel == 1,
     if MElayer == 0,
         % Global ME level, the mask is set to all 1 by default.
-        L1solverPara.objMask = ones(height, width);
+        L1solverPara.objMask = recurPara.GlobalMask; % GlobalMask is the compliment of the first layer object mask
         
         % Calling the lern2frmtau for the first time to derive outliers
         [transform, err, pred] = lern2frmtau(srcFrame, refFrame, L1solverPara);
         
         % for deriving bounding box, shall do ME recursively
         if maskMode,
+            % Global ME level, the mask is set to all 1 by default.
+            L1solverPara.objMask = ones(height, width);
+            
             % Define the transform origin
             imgSize = [height, width];
             

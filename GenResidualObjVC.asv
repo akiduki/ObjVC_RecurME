@@ -114,15 +114,7 @@ for seqID = 1:length(seqName),
         recurPara.MElayer = 0;
         para.tauModel = 'HOMOGRAPHY';
         if EnableGlobalMask,
-            tmpMask = zeros(height, width);
-            for objIdx = 1:length(objMaskL1),
-                tmpMask = tmpMask + objMaskL1{objIdx};
-            end
-            recurPara.GlobalMask = (tmpMask==0);
-        else
-            recurPara.GlobalMask = ones(height, width);
-        end
-        
+            recurPara.GlobalMask = 
         [predFrame, ~, tauL0, ~, ~] = SolveL1MErecursive(inc, src, para, segpara, recurPara);
         
         % simple inpainting for the out-of-boundary region by src
