@@ -1,4 +1,4 @@
-function [predFrame, errFrame, tau, objMask, qTreeCent] = SolveL1MErecursive(srcFrame, refFrame, L1solverPara, segPara, recurPara)
+function [predFrame, errFrame, tau, objMask, qTreeCent] = SolveL1MErecursive(srcFrame, refFrame, refFrame_org, L1solverPara, segPara, recurPara)
 % Author : Yuanyi Xue @ NYU-Poly
 % The upper warpper function for solving the L1 ME recursively.
 % The function takes in the referece frame and source frame, with
@@ -6,6 +6,7 @@ function [predFrame, errFrame, tau, objMask, qTreeCent] = SolveL1MErecursive(src
 % 
 % Inputs:
 % 1) srcFrame/refFrame - the source frame, reference frame in matrices
+% 1b) refFrame_org - original reference frame, only used when object ME is inverse estimated.
 % 2) L1solverPara - Parameter struct for L1 solver, check L1 solver for
 %                   parameter definination
 % 3) segPara      - Parameter struct for object segmentation, used when
@@ -194,21 +195,17 @@ if Y_channel == 1,
                 % In coding mode, compute the tau inversely
                 [rr_tran, ~, pred] = lern2frmtau(refFrame, srcFrame, L1solverPara);
                 
-                % once get the transform, warp the mask to the source frame
-                fw_tran =  [rr_tran(1,1) -rr_tran(1,2) -rr_tran(1,3)*rr_tran(1,1)+rr_tran(2,3)*rr_tran(1,2)
-                           -rr_tran(2,1)  rr_tran(2,2) -rr_tran(2,3)*rr_tran(1,1)+rr_tran(1,3)*rr_tran(2,1)
-                            0             0             1];
-                % warp the current mask to the source frame
-                fw_trm = fliptform(maketform('projective',fw_tran'));
-                curr_objMaskT = imtransform(curr_objMask, fw_trm, 'nearest', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 1);
+                % this is the forward transform
+                fw_trm = maketform('projective',rr_tran');
+                curr_objMaskT = imtransform(curr_objMask, fw_trm, 'nearest', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 0);
                 
                 % warp the reference frame to the source by using fw_trm as well
-                predFrame_objMaskT = imtransform(refFrame, fw_trm, 'bicubic', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 1);
+                predFrame_objMaskT = imtransform(refFrame, fw_trm, 'bicubic', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 0);
                 % now update the predFrame only within the masked region
-                predFrame(curr_objMaskT(:)==1) = pred(curr_objMaskT(:)==1);
+                predFrame(curr_objMaskT(:)==1) = predFrame_objMaskT(curr_objMaskT(:)==1);
                 
                 % store the tau
-                tau{objID} = fw_trm;
+                tau{objID} = rr_tran;
                 objMask = [];
             end
         end
@@ -355,7 +352,7 @@ while ~IsConverged,
                     predQuad = imtransform(refFrame, Tfm,'bicubic','XData', xdata, 'YData', ydata, ...
                         'UData', xdata, 'VData', ydata, 'Size', imgSize);
                     % new error image
-                    predFrameQuad(obj_idx) = predQuad(obj_idx); %############################
+                    predFrameQuad(obj_idx) = predQuad(obj_idx);
                     errQuad = srcFrame - predFrameQuad;
                     
                     % Convergence check

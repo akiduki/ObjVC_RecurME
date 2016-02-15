@@ -11,7 +11,8 @@ clear all;
 
 % seqName = {'Stefan', 'Office1', 'City', 'Football'};
 seqName = {'Stefan'};
-QP = [22 27 32 37];
+% QP = [22 27 32 37];
+QP = 22;
 
 for seqID = 1:length(seqName),
     for QPidx = 1:length(QP),
@@ -25,7 +26,7 @@ for seqID = 1:length(seqName),
         
         % Global control parameters
         Enable3rdObjLayer = 0;
-        EnableGlobalMask  = 0; % global mask, used to exclude the first object layer when predicting global motion
+        EnableGlobalMask  = 1; % global mask, used to exclude the first object layer when predicting global motion
         
         % L1-solver para
         para.tau0 = eye(3);
@@ -53,6 +54,7 @@ for seqID = 1:length(seqName),
         recurPara.max_recur = 5;
         recurPara.Y_channel = 1;
         recurPara.IsDebug = 0;
+        recurPara.GlobalMask = ones(height, width); % default global ME mask
         
         %% Deriving ObjMasks
         % first layer ObjMask
@@ -65,7 +67,7 @@ for seqID = 1:length(seqName),
         segpara.ConfThrLo =  10; % 8 for city 6;
         % para.tauModel = 'AFFINE';
         para.tauModel = 'HOMOGRAPHY';
-        [predFrameSrc, errFrameSrc, ~, objMaskL1, ~] = SolveL1MErecursive(src, ref, para, segpara, recurPara);
+        [predFrameSrc, errFrameSrc, ~, objMaskL1, ~] = SolveL1MErecursive(src, ref, ref, para, segpara, recurPara);
         
         % second layer ObjMask
         recurPara.MElayer = 1;
@@ -78,7 +80,7 @@ for seqID = 1:length(seqName),
         segpara.Conn_area = 150; % for Quad-tree, needs siginificantly smaller Conn_area
         % segpara.ConfThrLo = 4;
         para.tauModel = 'AFFINE';
-        [predFrameSrcL2, errFrameSrcL2, ~, objMaskL2, qTreeCent] = SolveL1MErecursive(src, predFrameSrc, para, segpara, recurPara);
+        [predFrameSrcL2, errFrameSrcL2, ~, objMaskL2, qTreeCent] = SolveL1MErecursive(src, predFrameSrc, ref, para, segpara, recurPara);
         
         % third layer ObjMask
         if Enable3rdObjLayer,
@@ -97,7 +99,7 @@ for seqID = 1:length(seqName),
                 for j=1:length(objMaskL2sub),
                     if ~isempty(objMaskL2sub{j}),
                         recurPara.objMask = objMaskL2sub{j};
-                        [predFrameSrcL3, errFrameSrcL3, ~, objMaskL3sub, qTreeCentL2sub] = SolveL1MErecursive(src, predFrameSrcL2, para, segpara, recurPara);
+                        [predFrameSrcL3, errFrameSrcL3, ~, objMaskL3sub, qTreeCentL2sub] = SolveL1MErecursive(src, predFrameSrcL2, ref, para, segpara, recurPara);
                         objMaskL3{objIdx}{j} = objMaskL3sub;
                         qTreeCentL2{objIdx}{j} = qTreeCentL2sub;
                     else
@@ -119,11 +121,17 @@ for seqID = 1:length(seqName),
                 tmpMask = tmpMask + objMaskL1{objIdx};
             end
             recurPara.GlobalMask = (tmpMask==0);
-        else
-            recurPara.GlobalMask = ones(height, width);
         end
         
-        [predFrame, ~, tauL0, ~, ~] = SolveL1MErecursive(inc, src, para, segpara, recurPara);
+        [pred, ~, tauL0, ~, ~] = SolveL1MErecursive(inc, src, src, para, segpara, recurPara);
+        
+        % get the frame back in case the global mask is enabled
+        if EnableGlobalMask,
+            predFrame = src;
+            predFrame(recurPara.GlobalMask==1) = pred(recurPara.GlobalMask==1);
+        else
+            predFrame = pred;
+        end
         
         % simple inpainting for the out-of-boundary region by src
         trans = ceil(abs(tauL0(1:2,3))).*sign(tauL0(1:2,3)); % only the translation part in tau
@@ -172,7 +180,7 @@ for seqID = 1:length(seqName),
                 % non split mode, directly apply objMask
                 recurPara.MElayer = 1;
                 recurPara.objMask = {objMaskL1sub};
-                [predFrameL1, ~, tauL1{objIdx}, ~, ~] = SolveL1MErecursive(inc, predL1, para, segpara, recurPara);
+                [predFrameL1, ~, tauL1{objIdx}, ~, ~] = SolveL1MErecursive(inc, predL1, src, para, segpara, recurPara);
                 
             else
                 % quad-tree split mode
@@ -193,7 +201,7 @@ for seqID = 1:length(seqName),
                 % Now apply each one successively
                 recurPara.MElayer = 1;
                 recurPara.objMask = curr_objMaskQuad;
-                [predFrameL1, ~, currL1, ~, ~] = SolveL1MErecursive(inc, predL1, para, segpara, recurPara);
+                [predFrameL1, ~, currL1, ~, ~] = SolveL1MErecursive(inc, predL1, src, para, segpara, recurPara);
                 tauL1{objIdx} = currL1;
                 
             end
@@ -218,7 +226,7 @@ for seqID = 1:length(seqName),
                 if ~isempty(objMaskL2sub),
                     recurPara.MElayer = 2;
                     recurPara.objMask = objMaskL2sub;
-                    [predFrameL2, ~, tauL2{objIdx}, ~, ~] = SolveL1MErecursive(inc, predL2, para, segpara, recurPara);
+                    [predFrameL2, ~, tauL2{objIdx}, ~, ~] = SolveL1MErecursive(inc, predL2, src, para, segpara, recurPara);
                 end
                 
             else
@@ -236,7 +244,7 @@ for seqID = 1:length(seqName),
                     if ~isempty(objMaskL2sub{qIdx}),
                         recurPara.objMask = objMaskL2sub{qIdx};
                         
-                        [predFrameL2q, ~, currL2{qIdx}, ~, ~] = SolveL1MErecursive(inc, predL2, para, segpara, recurPara);
+                        [predFrameL2q, ~, currL2{qIdx}, ~, ~] = SolveL1MErecursive(inc, predL2, src, para, segpara, recurPara);
                         predFrameL2(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx)) = predFrameL2q(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx));
                     end
                 end
@@ -255,8 +263,8 @@ for seqID = 1:length(seqName),
         % scale down only the translation part
         recurPara.transform(1,3) = recurPara.transform(1,3)/2; recurPara.transform(2,3) = recurPara.transform(2,3)/2;
         
-        predFrameU = SolveL1MErecursive(incU, srcU, para, segpara, recurPara);
-        predFrameV = SolveL1MErecursive(incV, srcV, para, segpara, recurPara);
+        predFrameU = SolveL1MErecursive(incU, srcU, srcU, para, segpara, recurPara);
+        predFrameV = SolveL1MErecursive(incV, srcV, srcV, para, segpara, recurPara);
         errFrameU = incU - predFrameU;
         errFrameV = incV - predFrameV;
         
@@ -285,8 +293,8 @@ for seqID = 1:length(seqName),
                 % scale down only the translation part
                 recurPara.transform{1}(1,3) = recurPara.transform{1}(1,3)/2; recurPara.transform{1}(2,3) = recurPara.transform{1}(2,3)/2;
                 
-                predFrameL1U = SolveL1MErecursive(incU, predL1U, para, segpara, recurPara);
-                predFrameL1V = SolveL1MErecursive(incV, predL1V, para, segpara, recurPara);
+                predFrameL1U = SolveL1MErecursive(incU, predL1U, srcU, para, segpara, recurPara);
+                predFrameL1V = SolveL1MErecursive(incV, predL1V, srcV, para, segpara, recurPara);
                 
             else
                 % quad-tree split mode
@@ -316,8 +324,8 @@ for seqID = 1:length(seqName),
                 recurPara.transform{3}(1,3) = recurPara.transform{3}(1,3)/2; recurPara.transform{3}(2,3) = recurPara.transform{3}(2,3)/2;
                 recurPara.transform{4}(1,3) = recurPara.transform{4}(1,3)/2; recurPara.transform{4}(2,3) = recurPara.transform{4}(2,3)/2;
                 
-                predFrameL1U = SolveL1MErecursive(incU, predL1U, para, segpara, recurPara);
-                predFrameL1V = SolveL1MErecursive(incV, predL1V, para, segpara, recurPara);
+                predFrameL1U = SolveL1MErecursive(incU, predL1U, srcU, para, segpara, recurPara);
+                predFrameL1V = SolveL1MErecursive(incV, predL1V, srcV, para, segpara, recurPara);
                 
             end
         end
@@ -354,8 +362,8 @@ for seqID = 1:length(seqName),
                         recurPara.transform{i}(2,3) = recurPara.transform{i}(2,3)/2;
                     end
                     
-                    predFrameL2U = SolveL1MErecursive(incU, predL2U, para, segpara, recurPara);
-                    predFrameL2V = SolveL1MErecursive(incV, predL2V, para, segpara, recurPara);
+                    predFrameL2U = SolveL1MErecursive(incU, predL2U, srcU, para, segpara, recurPara);
+                    predFrameL2V = SolveL1MErecursive(incV, predL2V, srcV, para, segpara, recurPara);
                 end
                 
             else
@@ -377,8 +385,8 @@ for seqID = 1:length(seqName),
                             recurPara.transform{i}(2,3) = recurPara.transform{i}(2,3)/2;
                         end
                         
-                        predFrameL2Uq = SolveL1MErecursive(incU, predL2U, para, segpara, recurPara);
-                        predFrameL2Vq = SolveL1MErecursive(incV, predL2V, para, segpara, recurPara);
+                        predFrameL2Uq = SolveL1MErecursive(incU, predL2U, srcU, para, segpara, recurPara);
+                        predFrameL2Vq = SolveL1MErecursive(incV, predL2V, srcV, para, segpara, recurPara);
                         predFrameL2U(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx)) = predFrameL2Uq(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx));
                         predFrameL2V(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx)) = predFrameL2Vq(Xstart(qIdx):Xend(qIdx),Ystart(qIdx):Yend(qIdx));
                     end
