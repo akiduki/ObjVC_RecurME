@@ -199,14 +199,13 @@ if Y_channel == 1,
                 fw_trm = fliptform(maketform('projective',fw_tran'));
                 curr_objMaskT = imtransform(curr_objMask, fw_trm, 'nearest', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 1);
                 
-                %!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                % Modified here 
+                % warp the reference frame to the source by using fw_trm as well
+                predFrame_objMaskT = imtransform(refFrame, fw_trm, 'bicubic', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 1);
+                % now update the predFrame only within the masked region
+                predFrame(curr_objMaskT(:)==1) = pred(curr_objMaskT(:)==1);
                 
-                
-                % Put each piece back to the reconstructed whole frame
-                predFrame(curr_objMask(:)==1) = pred(curr_objMask(:)==1);
                 % store the tau
-                tau{objID} = transform;
+                tau{objID} = fw_trm;
                 objMask = [];
             end
         end
