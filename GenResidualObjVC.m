@@ -25,61 +25,64 @@ for seqID = 1:length(seqName),
         totPix = height*width;
         
         % Global control parameters
-        Enable3rdObjLayer = 0;
-        EnableGlobalMask  = 1; % global mask, used to exclude the first object layer when predicting global motion
+        Enable3rdObjLayer   = 0;
+        EnableGlobalMask    = 1; % global mask, used to exclude the first object layer when predicting global motion
         
         % L1-solver para
-        para.tau0 = eye(3);
-        para.numPts = 10;
-        para.tolInner = 1e-4;
-        para.maxInnerIter = 100;
-        para.tolOuter = 1e-5;
-        para.maxOuterIter = 200;
-        para.tolDeltaXi = 1e-5;
-        para.lambda = 1;
-        para.objMask = ones(height,width);
-        para.TVmode = 0; % enable TV-L1 solver
-        para.verbose = 1; % show debug info
+        para.tau0           = eye(3);
+        para.numPts         = 10;
+        para.tolInner       = 1e-4;
+        para.maxInnerIter   = 100;
+        para.tolOuter       = 1e-5;
+        para.maxOuterIter   = 200;
+        para.tolDeltaXi     = 1e-5;
+        para.lambda         = 1;
+        para.objMask        = ones(height,width);
+        para.TVmode         = 0; % enable TV-L1 solver
+        para.verbose        = 1; % show debug info
+        para.EnableInvTrans = 1; % enable to apply the transform inversely
         
         % segmentation parameters, used only when maskMode==1
         segpara.Debugging_Enabled = 0;
-        segpara.QP = QP(QPidx);
-        segpara.Displacement = 5;
-        segpara.channel = 1;
-        segpara.ByPassFilling = 1;
+        segpara.QP                = QP(QPidx);
+        segpara.Displacement      = 5;
+        segpara.channel           = 1;
+        segpara.ByPassFilling     = 1;
         
         % recursive parameters
-        recurPara.thresh_outlier = 10; % threshold on error level for determining outlier pixels
+        recurPara.thresh_outlier     = 10; % threshold on error level for determining outlier pixels
         recurPara.inlier_cnt_percent = 0.85; % percentage of inlier pixels
-        recurPara.max_recur = 5;
-        recurPara.Y_channel = 1;
-        recurPara.IsDebug = 0;
-        recurPara.GlobalMask = ones(height, width); % default global ME mask
+        recurPara.max_recur          = 5;
+        recurPara.Y_channel          = 1;
+        recurPara.IsDebug            = 0;
+        recurPara.GlobalMask         = ones(height, width); % default global ME mask
         
         %% Deriving ObjMasks
         % first layer ObjMask
-        recurPara.MElayer = 0;
-        recurPara.maskMode = 1;
-        segpara.QuadTreeMode = 0; % No need to do quadtree for the first layer
-        segpara.ByPassAddMorpFilt = 0;
+        recurPara.MElayer           = 0;
+        recurPara.maskMode          = 1;
+        segpara.QuadTreeMode        = 0; % No need to do quadtree for the first layer
+        segpara.ByPassAddMorpFilt   = 0;
         % segpara.Conn_area = round(0.005*height*width); % or 0.01/0.02, here is the absolute number of pixels now
-        segpara.Conn_area = 500;
-        segpara.ConfThrLo =  10; % 8 for city 6;
-        % para.tauModel = 'AFFINE';
-        para.tauModel = 'HOMOGRAPHY';
+        segpara.Conn_area           = 500;
+        segpara.ConfThrLo           =  10; % 8 for city 6;
+        % para.tauModel             = 'AFFINE';
+        para.tauModel               = 'HOMOGRAPHY';
+        
         [predFrameSrc, errFrameSrc, ~, objMaskL1, ~] = SolveL1MErecursive(src, ref, ref, para, segpara, recurPara);
         
         % second layer ObjMask
-        recurPara.MElayer = 1;
-        recurPara.maskMode = 1;
-        recurPara.objMask = objMaskL1;
+        recurPara.MElayer               = 1;
+        recurPara.maskMode              = 1;
+        recurPara.objMask               = objMaskL1;
         % assign smaller percentage at object level
-        recurPara.inlier_cnt_percent = 0.80; recurPara.max_recur = 15; % recurPara.thresh_outlier = 8;
-        segpara.QuadTreeMode = 1;
-        segpara.ByPassAddMorpFilt = 0; % at finer object level, bypass additional morphological filtering
-        segpara.Conn_area = 150; % for Quad-tree, needs siginificantly smaller Conn_area
-        % segpara.ConfThrLo = 4;
-        para.tauModel = 'AFFINE';
+        recurPara.inlier_cnt_percent    = 0.80; 
+        recurPara.max_recur             = 15; % recurPara.thresh_outlier = 8;
+        segpara.QuadTreeMode            = 1;
+        segpara.ByPassAddMorpFilt       = 0; % at finer object level, bypass additional morphological filtering
+        segpara.Conn_area               = 150; % for Quad-tree, needs siginificantly smaller Conn_area
+        para.tauModel                   = 'AFFINE';
+        
         [predFrameSrcL2, errFrameSrcL2, ~, objMaskL2, qTreeCent] = SolveL1MErecursive(src, predFrameSrc, ref, para, segpara, recurPara);
         
         % third layer ObjMask

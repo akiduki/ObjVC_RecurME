@@ -39,6 +39,9 @@ inlier_cnt_percent = recurPara.inlier_cnt_percent; % percentage of inlier pixels
 max_recur = recurPara.max_recur; % maximal recursive time
 Y_channel = recurPara.Y_channel;
 IsDebug = recurPara.IsDebug; % debug flag, used to visualize the intermediate result
+
+EnableInvTrans = para.EnableInvTrans;
+
 qTreeCent = []; % quad-tree flag
 
 % Object segmentation parameters
@@ -192,20 +195,29 @@ if Y_channel == 1,
                 qTreeCent{objID} = quadtreeFlag;
             else
                 % Calling the lern2frmtau for coding mode
-                % In coding mode, compute the tau inversely
-                [rr_tran, ~, pred] = lern2frmtau(refFrame, srcFrame, L1solverPara);
-                
-                % this is the forward transform
-                fw_trm = maketform('projective',rr_tran');
-                curr_objMaskT = imtransform(curr_objMask, fw_trm, 'nearest', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 0);
-                
-                % warp the reference frame to the source by using fw_trm as well
-                predFrame_objMaskT = imtransform(refFrame, fw_trm, 'bicubic', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 0);
-                % now update the predFrame only within the masked region
-                predFrame(curr_objMaskT(:)==1) = predFrame_objMaskT(curr_objMaskT(:)==1);
-                
-                % store the tau
-                tau{objID} = rr_tran;
+                if EnableInvTrans,
+                    % Inverse mode, compute the tau inversely
+                    [rr_tran, ~, pred] = lern2frmtau(refFrame, srcFrame, L1solverPara);
+                    
+                    % this is the forward transform
+                    fw_trm = maketform('projective',rr_tran');
+                    curr_objMaskT = imtransform(curr_objMask, fw_trm, 'nearest', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 0);
+                    
+                    % warp the reference frame to the source by using fw_trm as well
+                    predFrame_objMaskT = imtransform(refFrame, fw_trm, 'bicubic', 'XData', xdata, 'YData', ydata, 'UData', xdata, 'VData', ydata, 'Size', imgSize, 'fill', 0);
+                    % now update the predFrame only within the masked region
+                    predFrame(curr_objMaskT(:)==1) = predFrame_objMaskT(curr_objMaskT(:)==1);
+                    
+                    % store the tau
+                    tau{objID} = rr_tran;
+                else
+                    % Regular mode
+                    [tran, ~, pred] = lern2frmtau(srcFrame, refFrame, L1solverPara);
+                    
+                    % Update the predFrame only within the masked region
+                    predFrame(curr_objMask(:)==1) = pred(curr_objMask(:)==1);
+                    tau{objID} = tran;
+                end
                 objMask = [];
             end
         end
